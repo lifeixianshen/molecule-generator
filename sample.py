@@ -49,7 +49,7 @@ for _ in range(args.num_iteration):
 
 #write smiles and calcualte properties of them    
 print ('number of trial : ', len(smiles))
-smiles = list(set([s.split('E')[0] for s in smiles]    ))
+smiles = list({s.split('E')[0] for s in smiles})
 print ('number of generate smiles (after remove duplicated ones) : ', len(smiles))
 ms = [Chem.MolFromSmiles(s) for s in smiles]
 ms = [m for m in ms if m is not None]

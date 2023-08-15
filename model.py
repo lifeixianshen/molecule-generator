@@ -22,26 +22,31 @@ class CVAE():
         self.X = tf.placeholder(tf.int32, [self.batch_size, None])
         self.Y = tf.placeholder(tf.int32, [self.batch_size, None])
         self.L = tf.placeholder(tf.int32, [self.batch_size])
-        
 
-        encoded_rnn_size = [self.unit_size for i in range(self.n_rnn_layer)]
-        
+
+        encoded_rnn_size = [self.unit_size for _ in range(self.n_rnn_layer)]
+
         with tf.variable_scope('rnn'):
-            encode_cell=[]
-            for i in encoded_rnn_size[:]:
-                encode_cell.append(tf.nn.rnn_cell.LSTMCell(i))
+            encode_cell = [tf.nn.rnn_cell.LSTMCell(i) for i in encoded_rnn_size[:]]
             self.encoder = tf.nn.rnn_cell.MultiRNNCell(encode_cell)
-        
-        self.weights = {}
+
         self.biases = {}
 
 
-        self.weights['softmax'] = tf.get_variable("softmaxw", initializer=tf.random_uniform(shape=[encoded_rnn_size[-1], self.vocab_size], minval = -0.1, maxval = 0.1))       
-        
+        self.weights = {
+            'softmax': tf.get_variable(
+                "softmaxw",
+                initializer=tf.random_uniform(
+                    shape=[encoded_rnn_size[-1], self.vocab_size],
+                    minval=-0.1,
+                    maxval=0.1,
+                ),
+            )
+        }
         self.biases['softmax'] =  tf.get_variable("softmaxb", initializer=tf.zeros(shape=[self.vocab_size]))
 
         self.embedding_encode = tf.get_variable(name = 'encode_embedding', shape = [self.unit_size, self.vocab_size], initializer = tf.random_uniform_initializer( minval = -0.1, maxval = 0.1))
-        
+
         self.decoded, decoded_logits = self.rnn()
 
         weights = tf.sequence_mask(self.L, tf.shape(self.X)[1])
@@ -49,13 +54,13 @@ class CVAE():
         weights = tf.cast(weights, tf.float32)
         self.reconstr_loss = tf.reduce_mean(tf.contrib.seq2seq.sequence_loss(
             logits=decoded_logits, targets=self.Y, weights=weights))
-        
+
         # Loss
-        self.loss = self.reconstr_loss 
+        self.loss = self.reconstr_loss
         #self.loss = self.reconstr_loss 
         optimizer    = tf.train.AdamOptimizer(self.lr)
         self.opt = optimizer.minimize(self.loss)
-        
+
         self.mol_pred = tf.argmax(self.decoded, axis=2)
         self.sess = tf.Session()
 
@@ -69,7 +74,13 @@ class CVAE():
     def rnn(self): 
         seq_length=tf.shape(self.X)[1]
         X = tf.nn.embedding_lookup(self.embedding_encode, self.X)
-        self.initial_rnn_state = tuple([tf.contrib.rnn.LSTMStateTuple(tf.zeros((self.batch_size, self.unit_size)), tf.zeros((self.batch_size, self.unit_size))) for i in range(3)])
+        self.initial_rnn_state = tuple(
+            tf.contrib.rnn.LSTMStateTuple(
+                tf.zeros((self.batch_size, self.unit_size)),
+                tf.zeros((self.batch_size, self.unit_size)),
+            )
+            for _ in range(3)
+        )
         Y, self.output_rnn_state = tf.nn.dynamic_rnn(self.encoder, X, dtype=tf.float32, scope = 'rnn', sequence_length = self.L, initial_state=self.initial_rnn_state)
         Y = tf.reshape(Y, [self.batch_size*seq_length, -1])
         Y = tf.matmul(Y, self.weights['softmax'])+self.biases['softmax']
